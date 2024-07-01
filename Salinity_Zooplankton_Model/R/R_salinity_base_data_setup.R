@@ -1,5 +1,5 @@
 #Create a new salinity base data to allow inclusion of 2015-2022 data not present in the CSAMP dataset
-root <- "~/GitHub/DeltaSmelt_VOI"
+root <- "~/GitHub/DeltaSmelt_SummerFallX2_VOI"
 setwd(root)
 
 path_data <- file.path(root,"Salinity_Zooplankton_Model","Data")
