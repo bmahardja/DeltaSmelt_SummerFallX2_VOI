@@ -82,12 +82,15 @@ dss_data_pull<-function(dss_input="D:\\2023-01-06 - CalSim3 example file for ReR
   #Old and Middle River flow (OMR)
   java.OMR <- dssFile$get("/CALSIM/C_OMR014/CHANNEL//1MON/L2020A/") 
   OMR=data.frame(Date=java.OMR$times %>% from_time_stamp,OMR=java.OMR$values)
+  #Montezuma salinity (previous month)
+  java.MTZ <- dssFile$get("/CALSIM/MTZ_EC_7DAY/SALINITY//1MON/L2020A/") 
+  MTZ = data.frame(Date=java.MTZ$times %>% from_time_stamp, MTZ_EC_prev=java.MTZ$values)
   #X2 (previous month)
   java.X2 <- dssFile$get("/CALSIM/X2_PRV/X2-POSITION-PREV//1MON/L2020A/") 
   X2=data.frame(Date=java.X2$times %>% from_time_stamp,X2_prev=java.X2$values)
   
-  final_data_frame= OUTFLOW %>% left_join(OMR) %>% left_join(X2) %>%
-    mutate(X2_current=lead(X2_prev,n=1))
+  final_data_frame= OUTFLOW %>% left_join(OMR) %>% left_join(MTZ) %>% left_join(X2) %>%
+    mutate(X2_current=lead(X2_prev,n=1),MTZ_EC_current=lead(MTZ_EC_prev,n=1))
   return(final_data_frame)
 }
 
@@ -119,8 +122,20 @@ combined_data <- bind_rows(AltF80_data,AltF74_data,AltS74_data,AltS74F80_data,
                            AltNoX2_data)
 data_flow_IMBR <- combined_data %>% rename(X2=X2_current) %>% select(-X2_prev) %>% mutate(year=year(Date), month=month(Date))
 
-#Export data
+#Export full data
 write.csv(data_flow_IMBR,file.path(path_hydro,"IBMR_FlowData_DeltaSmelt_SummerFallX2_VOI_CalendarYear.csv"),row.names=F)
+
+#Create X2 information
+data_X2_IBMR <- data_flow_IMBR %>% select(scenario,year,month,X2) %>% filter(year %in% c(1995:2014)) %>%
+  spread(month,X2)
+
+#Create OMR information
+data_OMR_IBMR <- data_flow_IMBR %>% select(scenario,year,month,OMR) %>% filter(year %in% c(1995:2014)) %>%
+  spread(month,OMR)
+
+#Export X2 and OMR data for IBMR input
+write.csv(data_X2_IBMR,file.path(path_hydro,"IBMR_X2_SummerFallX2VOI_input.csv"),row.names=F)
+write.csv(data_OMR_IBMR,file.path(path_hydro,"IBMR_OMR_SummerFallX2VOI_input.csv"),row.names=F)
 
 ##### Calculate flow input for the Delta Smelt LCME
 

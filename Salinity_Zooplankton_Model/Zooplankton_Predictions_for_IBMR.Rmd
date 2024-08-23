@@ -1,0 +1,127 @@
+---
+title: "Zooplankton Data Input for LCM"
+author: "Brian Mahardja"
+date: "2023-04-12"
+output: word_document
+knit: (function(input, ...) {
+    rmarkdown::render(
+      input,
+      output_dir = "~/GitHub/DeltaSmelt_LCM/Salinity_Zooplankton_analysis"
+    )
+  })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/GitHub/DeltaSmelt_SummerFallX2_VOI/Salinity_Zooplankton_Model")
+options(scipen=999)
+```
+
+Original script and dataset packages was written by Sam Bashevkin and can be found here: https://github.com/sbashevkin/FLOATDrought
+
+# Load packages
+
+```{r, message=FALSE, warning=FALSE}
+require(conflicted)
+require(MASS)
+require(dplyr)
+require(zooper)
+require(lubridate)
+require(readr)
+require(tidyr)
+require(ggplot2)
+require(sf)
+require(readxl)
+require(stringr)
+require(mgcv)
+require(purrr)
+require(deltamapr)
+require(scales)
+library(imputeTS)
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+```
+
+# Load data
+
+Load zooplankton model output and strata volume from Will Smith
+
+```{r zoop modeled data, echo=T, results='hide',message=FALSE, warning=FALSE}
+model_data<-read.csv(file.path("Output","zoop sal adjustments.csv"))
+
+IBMR_data_format <- read.csv(file.path("Data","prey_taxa_inputs_IBMR.csv"))
+```
+
+# Impute infinity and N/A with linear interpolation
+
+When 0s were introduced for baseline predictions, it resulted in infinite values for the scalars. We replaced these infinities with linear interpolations from the time series of model predictions for a specific alternative, taxon, and subregion. This step yielded no more infinite scalar values.
+
+```{r impute}
+## Impute data using linear interpolation
+
+# Change inf and NaN to NA
+model_data[sapply(model_data, is.infinite)] <- NA
+model_data[sapply(model_data, is.nan)] <- NA
+
+
+# Split data into list
+zoop_model_data_arranged_median <- model_data %>% 
+  arrange(year, month) %>%
+  select("region","year","month","IBMR",ends_with("median")) %>%
+  gather("scenario","value",ends_with("median"))
+
+zoop_model_data_median_split <- split(zoop_model_data_arranged_median , list(zoop_model_data_arranged_median$region,zoop_model_data_arranged_median$IBMR))
+
+# Impute data using linear interpolation
+for(i in seq_along(zoop_model_data_median_split)){ 
+  zoop_model_data_median_split[[i]]$value <- na_interpolation(zoop_model_data_median_split[[i]]$value)
+}
+
+# Rejoin into a single data frame
+zoop_model_data_median_imputed<-bind_rows(zoop_model_data_median_split) %>%
+  mutate(Date=as.Date(paste(year,month,"01",sep="-")))
+
+ggplot(data=zoop_model_data_median_imputed %>% filter(region=="NW Suisun")) + geom_line(aes(x=Date,y=value,color=scenario),alpha=0.5) + theme_bw() + facet_wrap(~IBMR, scales = "free")
+
+```
+# Use pdiapfor prediction for pdiapjuv
+
+```{r pdiapjuv, echo=T, results='hide',message=FALSE, warning=FALSE}
+
+# Remove mysid since it is not used
+zoop_model_data_median_imputed <- zoop_model_data_median_imputed %>% filter(IBMR!="mysid")
+str(zoop_model_data_median_imputed)
+
+# Create pdiapjuv dataframe
+pdiapjuv_data <- zoop_model_data_median_imputed %>% filter(IBMR=="pdiapfor") %>% mutate(IBMR=as.character("pdiapjuv"))
+
+# Add pdiapjuv back into the main prediction data
+zoop_model_data_median_imputed <- bind_rows(zoop_model_data_median_imputed,pdiapjuv_data)
+
+```
+
+
+# Format data to allow for easy input into IBMR and export
+
+
+```{r reformat , echo=T, results='hide',message=FALSE, warning=FALSE}
+
+# Get the strata and taxa code in case they are necessary
+IBMR_code <- IBMR_data_format %>% rename(year=Year,month=Month,region=Region,IBMR=Taxa) %>%
+  select(year,month,region,IBMR,Strata_code,Taxa_code) %>% distinct()
+
+# Spread zoop scalar data
+zoop_model_data_median_imputed_spread <- spread(zoop_model_data_median_imputed,scenario,value)
+
+# Add strata and taxa code
+zoop_model_data_median_imputed_spread <- zoop_model_data_median_imputed_spread %>% left_join(IBMR_code)
+
+# Remove years that are not present in IBMR input
+zoop_model_data_median_imputed_spread <- zoop_model_data_median_imputed_spread %>% filter(!is.na(Strata_code))
+
+# Export data
+write.csv(zoop_model_data_median_imputed_spread,file.path("Output",paste("zoop_scalar_output_",Sys.Date(),".csv",sep="")))
+
+```
+
