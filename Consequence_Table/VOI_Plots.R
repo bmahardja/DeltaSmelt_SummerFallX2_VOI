@@ -28,6 +28,9 @@ line_plot_data <- cons_table_std %>% group_by(Alternatives,Objective) %>%
 custom_colors <- c("Alt F80" = "black","Alt F74" = "#E69F00", "Alt S74" = "#0072B2", "Alt S74F80"= "#D55E00","Alt NoX2" = "black")
 custom_line <- c("Alt F80" = "solid","Alt F74" = "solid", "Alt S74" = "longdash", "Alt S74F80"= "longdash","Alt NoX2" = "dotted")
 
+# Change name for AFS
+levels(line_plot_data$Alternatives)[levels(line_plot_data$Alternatives) == "Alt NoX2"] <- "Alt NoFlow"
+
 # Line plot
 plot_scoreline <- ggplot(data=line_plot_data, aes(x=fish_weight, y=comp_score, color=Alternatives,linetype=Alternatives)) +
   geom_line(linewidth= 1.2) +
@@ -294,10 +297,89 @@ tiff(filename=file.path("Output","Figure_EVPI_partial_2Objectives.tiff"),
 plot_partial_EVPI
 dev.off()
 
+#######
+# Alternate way of showing data instead of consequence table
+# Using bar chart
+
+# Define custom colors
+custom_colors_alt <- c("Alt F80" = "#000000", "Alt F74" = "#E69F00",
+                       "Alt S74" = "yellow4" , "Alt S74F80" = "#56B4E9","Alt NoX2"= "#999999")
+
+# Grab data for the water cost plot
+data_plot_water <- cons_table %>% filter(Objective=="WaterCost"&Hypothesis=="H1") %>%
+  select(-Hypothesis)
+
+# Convert the 'Category' column to a factor with a specific order
+data_plot_water$Alternatives <- factor(data_plot_water$Alternatives, levels = c("Alt F80", "Alt F74", "Alt S74",
+                                                                                "Alt S74F80","Alt NoX2"))
+
+# Change name for AFS
+levels(data_plot_water$Alternatives)[levels(data_plot_water$Alternatives) == "Alt NoX2"] <- "Alt NoFlow"
+
+# Water cost plot
+plot_bar_water <- ggplot(data_plot_water, aes(x=Alternatives, y=Score, fill=Alternatives)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Water Cost Objective",
+       x = "Alternative",
+       y = "Thousand Acre Feet") + 
+  scale_fill_manual(values = custom_colors_alt,guide="none")  +   # Use a color palette
+  theme_bw() +                          # Classic theme 
+  theme(axis.text = element_text(size = 14),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+        axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size=14))
+#plot_bar_water
+
+# Export plot
+tiff(filename=file.path("Output","Figure_BarPlot_WaterObjective.tiff"),
+     type="cairo",
+     units="in", 
+     width=8, #10*1, 
+     height=5, #22*1, 
+     pointsize=5, #12, 
+     res=300,
+     compression="lzw")
+plot_bar_water
+dev.off()
+
+# Grab data for the delta smelt plot
+data_plot_dsm <- dsm
+
+# Convert the 'Category' column to a factor with a specific order
+data_plot_dsm$Alternatives <- factor(data_plot_dsm$Alternatives, levels = c("Alt F80", "Alt F74", "Alt S74",
+                                                                                "Alt S74F80","Alt NoX2"))
+# Change name for AFS
+levels(data_plot_dsm$Alternatives)[levels(data_plot_dsm$Alternatives) == "Alt NoX2"] <- "Alt NoFlow"
+
+# Delta Smelt obj plot
+plot_bar_dsm <- ggplot(data_plot_dsm, aes(x=Alternatives, y=Score, fill=Alternatives)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Delta Smelt Objective",
+       x = "Alternative",
+       y = "Lambda") + 
+  facet_grid(cols = vars(Hypothesis)) +
+  scale_fill_manual(values = custom_colors_alt,guide="none")  +   # Use a color palette
+  theme_bw() +                          # Classic theme 
+  theme(axis.text.y = element_text(size = 14),
+        axis.text.x = element_text(size = 14,angle = 45, hjust = 1),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+        axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size=14),
+        strip.text = element_text(size = 14))
+plot_bar_dsm
 
 
-
-
+# Export plot
+tiff(filename=file.path("Output","Figure_BarPlot_DeltaSmeltObjective.tiff"),
+     type="cairo",
+     units="in", 
+     width=11, #10*1, 
+     height=6, #22*1, 
+     pointsize=5, #12, 
+     res=300,
+     compression="lzw")
+plot_bar_dsm
+dev.off()
 
 #################################
 #Excess code DO NOT USE
