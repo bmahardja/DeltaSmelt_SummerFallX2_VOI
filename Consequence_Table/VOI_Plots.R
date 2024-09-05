@@ -25,11 +25,15 @@ line_plot_data <- cons_table_std %>% group_by(Alternatives,Objective) %>%
   summarise(comp_score = sum(score_hyp)) %>% mutate(fish_weight = case_when(Objective == "DeltaSmelt" ~ 1.0,
                                                                             Objective == "WaterCost" ~ 0))
 # Define custom colors
-custom_colors <- c("Alt F80" = "black","Alt F74" = "#E69F00", "Alt S74" = "#0072B2", "Alt S74F80"= "#D55E00","Alt NoX2" = "black")
-custom_line <- c("Alt F80" = "solid","Alt F74" = "solid", "Alt S74" = "longdash", "Alt S74F80"= "longdash","Alt NoX2" = "dotted")
+custom_colors <- c("Alt F80" = "black","Alt F74" = "#E69F00", "Alt S74" = "#0072B2", "Alt S74F80"= "#D55E00","Alt NoX2" = "black","Alt NoFlow" = "black")
+custom_line <- c("Alt F80" = "solid","Alt F74" = "solid", "Alt S74" = "longdash", "Alt S74F80"= "longdash","Alt NoX2" = "dotted","Alt NoFlow" = "dotted")
 
+# Convert the 'Category' column to a factor with a specific order
+line_plot_data$Alternatives <- factor(line_plot_data$Alternatives, levels = c("Alt F80", "Alt F74", "Alt S74",
+                                                                                "Alt S74F80","Alt NoX2"))
 # Change name for AFS
-levels(line_plot_data$Alternatives)[levels(line_plot_data$Alternatives) == "Alt NoX2"] <- "Alt NoFlow"
+#levels(line_plot_data$Alternatives)[levels(line_plot_data$Alternatives) == "Alt NoX2"] <- "Alt NoFlow"
+
 
 # Line plot
 plot_scoreline <- ggplot(data=line_plot_data, aes(x=fish_weight, y=comp_score, color=Alternatives,linetype=Alternatives)) +
@@ -47,6 +51,7 @@ plot_scoreline <- ggplot(data=line_plot_data, aes(x=fish_weight, y=comp_score, c
   legend.key.size = unit(1.2, "cm"))+
   scale_color_manual(values = custom_colors) +
   scale_linetype_manual(values = custom_line)
+plot_scoreline
 
 # Export plot
 tiff(filename=file.path("Output","Figure_LinePlot_2Objectives.tiff"),
@@ -269,7 +274,7 @@ plot_partial_EVPI <- ggplot(EVPI_results_combined, aes(x=fish_weight, y=percent_
   geom_area(alpha=0.6, position='stack') +  
   labs(title = NULL,
        x = "Delta Smelt objective weight",
-       y = "Expected value of perfect information (%)") +
+       y = "Expected value of partial information (%)") +
   theme_classic() +                          # Classic theme 
   theme(axis.text = element_text(size = 14),
         panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
@@ -360,6 +365,7 @@ plot_bar_dsm <- ggplot(data_plot_dsm, aes(x=Alternatives, y=Score, fill=Alternat
   facet_grid(cols = vars(Hypothesis)) +
   scale_fill_manual(values = custom_colors_alt,guide="none")  +   # Use a color palette
   theme_bw() +                          # Classic theme 
+  coord_cartesian(ylim=c(0.75,1)) +
   theme(axis.text.y = element_text(size = 14),
         axis.text.x = element_text(size = 14,angle = 45, hjust = 1),
         panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
@@ -380,6 +386,18 @@ tiff(filename=file.path("Output","Figure_BarPlot_DeltaSmeltObjective.tiff"),
      compression="lzw")
 plot_bar_dsm
 dev.off()
+
+
+
+
+
+
+
+
+
+
+
+
 
 #################################
 #Excess code DO NOT USE
