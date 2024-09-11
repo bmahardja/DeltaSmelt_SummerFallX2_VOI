@@ -2,7 +2,7 @@ library(tidyverse)
 
 setwd("C:/Users/bmahardja/Documents/GitHub/DeltaSmelt_SummerFallX2_VOI/Consequence_Table")
 
-cons_table <- read.csv(file.path("Data","ConsequenceTable_2024-08-21.csv"))
+cons_table <- read.csv(file.path("Data","ConsequenceTable_2024-09-10.csv"))
 
 # Standardize score based on local scale
 
@@ -14,10 +14,15 @@ water <- cons_table %>% filter(Objective=="WaterCost") %>%
 
 
 # Hypothesis weights
-cons_table_std <- bind_rows(dsm, water) %>% mutate(hypo_weight= case_when(Hypothesis == "H1" ~ 0.575,
-                                                                          Hypothesis == "H2" ~ 0.175,
-                                                                          Hypothesis == "H3" ~ 0.175,
-                                                                          Hypothesis == "H4" ~ 0.075)) %>%
+cons_table_std <- bind_rows(dsm, water) %>% mutate(hypo_weight= case_when(Hypothesis == "H1" ~ 0.2875,
+                                                                          Hypothesis == "H2" ~ 0.0875,
+                                                                          Hypothesis == "H3" ~ 0.0875,
+                                                                          Hypothesis == "H4" ~ 0.0375,
+                                                                          Hypothesis == "H5" ~ 0.2875,
+                                                                          Hypothesis == "H6" ~ 0.0875,
+                                                                          Hypothesis == "H7" ~ 0.0875,
+                                                                          Hypothesis == "H8" ~ 0.0375
+                                                                          )) %>%
   mutate(score_hyp = hypo_weight*std_score) 
 
 # Create dataset necessary for the line plot
@@ -155,7 +160,7 @@ EVPI_results_partial_food <- data.frame(fish_weight = numeric(),
                                         Hypothesis = factor())
 
 # Define a function to calculate partial EVPI for a given fish weight
-calculate_partial_EVPI <- function(i) {
+calculate_partial_EVPI_food <- function(i) {
   cons_table_reconfig <- cons_table_std %>% 
     dplyr::select(Alternatives, Hypothesis, Objective, std_score, hypo_weight) %>% 
     spread(Objective, std_score) %>% 
@@ -164,7 +169,11 @@ calculate_partial_EVPI <- function(i) {
     mutate(Hypothesis_food = case_when(Hypothesis == "H1" ~ "Food",
                                        Hypothesis == "H2" ~ "Food",
                                        Hypothesis == "H3" ~ "No Food",
-                                       Hypothesis == "H4" ~ "No Food"))
+                                       Hypothesis == "H4" ~ "No Food",
+                                       Hypothesis == "H5" ~ "Food",
+                                       Hypothesis == "H6" ~ "Food",
+                                       Hypothesis == "H7" ~ "No Food",
+                                       Hypothesis == "H8" ~ "No Food"))
   
   partial_certainty_calc <- cons_table_reconfig %>% 
     group_by(Hypothesis_food, Alternatives) %>% 
@@ -199,7 +208,7 @@ calculate_partial_EVPI <- function(i) {
 }
 
 # Use lapply to calculate the partial EVPI for each fish weight
-EVPI_results_list <- lapply(seq(0, 1, 0.01), calculate_partial_EVPI)
+EVPI_results_list <- lapply(seq(0, 1, 0.01), calculate_partial_EVPI_food)
 
 # Combine the results into a single data frame
 EVPI_results_partial_food <- do.call(rbind, EVPI_results_list)
@@ -220,7 +229,11 @@ calculate_partial_EVPI_movement <- function(i) {
     mutate(Hypothesis_movement = case_when(Hypothesis == "H1" ~ "Movement",
                                            Hypothesis == "H2" ~ "No Movement",
                                            Hypothesis == "H3" ~ "Movement",
-                                           Hypothesis == "H4" ~ "No Movement"))
+                                           Hypothesis == "H4" ~ "No Movement",
+                                           Hypothesis == "H5" ~ "Movement",
+                                           Hypothesis == "H6" ~ "No Movement",
+                                           Hypothesis == "H7" ~ "Movement",
+                                           Hypothesis == "H8" ~ "No Movement"))
   
   partial_certainty_calc <- cons_table_reconfig %>% 
     group_by(Hypothesis_movement, Alternatives) %>% 
@@ -260,18 +273,115 @@ EVPI_results_list_movement <- lapply(seq(0, 1, 0.01), calculate_partial_EVPI_mov
 # Combine the results into a single data frame
 EVPI_results_partial_movement <- do.call(rbind, EVPI_results_list_movement)
 
-# Combine the two datasets together
-EVPI_results_combined <- bind_rows(EVPI_results_partial_food,EVPI_results_partial_movement)
+# Add bioenergetic uncertainty
+
+# Set up the data frame
+EVPI_results_partial_bioenergetics <- data.frame(fish_weight = numeric(),
+                                            EVPI = numeric(), 
+                                            Hypothesis = factor())
+
+# Define a function to calculate partial EVPI for a given fish weight
+calculate_partial_EVPI_bioenergetics <- function(i) {
+  cons_table_reconfig <- cons_table_std %>% 
+    dplyr::select(Alternatives, Hypothesis, Objective, std_score, hypo_weight) %>% 
+    spread(Objective, std_score) %>% 
+    mutate(composite_score = (DeltaSmelt * i) + (WaterCost * (1 - i))) %>%
+    # Create a new column that defines the movement hypothesis
+    mutate(Hypothesis_bioenergetics = case_when(Hypothesis == "H1" ~ "IBMR_v1",
+                                           Hypothesis == "H2" ~ "IBMR_v1",
+                                           Hypothesis == "H3" ~ "IBMR_v1",
+                                           Hypothesis == "H4" ~ "IBMR_v1",
+                                           Hypothesis == "H5" ~ "IBMR_v2",
+                                           Hypothesis == "H6" ~ "IBMR_v2",
+                                           Hypothesis == "H7" ~ "IBMR_v2",
+                                           Hypothesis == "H8" ~ "IBMR_v2"))
+  
+  partial_certainty_calc <- cons_table_reconfig %>% 
+    group_by(Hypothesis_bioenergetics, Alternatives) %>% 
+    mutate(composite_score_hypo = hypo_weight * composite_score) %>%
+    summarise(composite_score = sum(composite_score_hypo), 
+              hypo_weight = sum(hypo_weight), .groups = 'drop') %>%
+    # Remember to divide everything by the collapsed/combined hypothesis weights
+    mutate(composite_score = composite_score / hypo_weight) %>% 
+    ungroup() %>%
+    group_by(Hypothesis_bioenergetics) %>% 
+    summarise(hypo_weight = mean(hypo_weight), 
+              best_score = max(composite_score), .groups = 'drop') %>%
+    mutate(score_for_EVPI = hypo_weight * best_score)
+  
+  EV_under_partial_certainty <- sum(partial_certainty_calc$score_for_EVPI)
+  
+  uncertainty_calc <- cons_table_reconfig %>% 
+    mutate(composite_score_hypo = hypo_weight * composite_score) %>% 
+    group_by(Alternatives) %>% 
+    summarise(composite_score = sum(composite_score_hypo), .groups = 'drop')
+  
+  EV_under_uncertainty <- max(uncertainty_calc$composite_score)
+  
+  EVPI_partial_bioenergetics <- EV_under_partial_certainty - EV_under_uncertainty
+  
+  # Create a new row with the fish weight and EVPI results
+  new_row <- data.frame(fish_weight = i,
+                        EVPI = EVPI_partial_bioenergetics,
+                        Hypothesis = "Bioenergetics")
+  
+  return(new_row)
+}
+
+# Use lapply to calculate the partial EVPI for each fish weight
+EVPI_results_list_bioenergetics <- lapply(seq(0, 1, 0.01), calculate_partial_EVPI_bioenergetics)
+
+# Combine the results into a single data frame
+EVPI_results_partial_bioenergetics <- do.call(rbind, EVPI_results_list_bioenergetics)
+
+
+# Combine the three datasets together
+EVPI_results_combined <- bind_rows(EVPI_results_partial_food,EVPI_results_partial_movement,EVPI_results_partial_bioenergetics)
 
 EVPI_results_combined <- EVPI_results_combined %>% left_join(EVPI_results %>% select(fish_weight,EV_uncertainty)) %>%
   mutate(percent_EVPI = EVPI/EV_uncertainty*100)
 
 # Define custom colors
-custom_colors <- c("Food" = "blue2", "Movement" = "yellow4")
+custom_colors <- c("Food" = "blue2", "Movement" = "yellow4", "Bioenergetics" = "orange")
 
 # Stacked area chart
-plot_partial_EVPI <- ggplot(EVPI_results_combined, aes(x=fish_weight, y=percent_EVPI, fill=Hypothesis)) + 
-  geom_area(alpha=0.6, position='stack') +  
+plot_partial_EVPI_stack <- ggplot(EVPI_results_combined, aes(x=fish_weight, y=percent_EVPI, fill=Hypothesis)) + 
+  geom_area(alpha=0.6, position='stack') + 
+   labs(title = NULL,
+       x = "Delta Smelt objective weight",
+       y = "Expected value of partial information (%)") +
+  theme_classic() +                          # Classic theme 
+  theme(axis.text = element_text(size = 14),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+        legend.text=element_text(size=14),
+        legend.title=element_text(size=14),
+        axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size=14))+
+  theme(legend.title = element_blank(),      # Remove legend title
+        legend.position = c(0.2, 0.5),            # Position the legend
+        legend.background = element_rect(color = "black"), # Legend background
+        legend.key = element_rect(fill = "lightgray")) + # Legend key color
+  scale_fill_manual(values = custom_colors)  +   # Use a color palette
+  scale_color_manual(values = custom_colors)
+
+plot_partial_EVPI_stack
+
+# Export plot
+tiff(filename=file.path("Output","Figure_EVPI_partial_2Objectives_stack.tiff"),
+     type="cairo",
+     units="in", 
+     width=8, #10*1, 
+     height=6, #22*1, 
+     pointsize=5, #12, 
+     res=300,
+     compression="lzw")
+plot_partial_EVPI_stack
+dev.off()
+
+# Line plot
+plot_partial_EVPI_line <- ggplot(EVPI_results_combined, aes(x=fish_weight, y=percent_EVPI, fill=Hypothesis)) + 
+  #geom_area(alpha=0.6, position='stack') +  
+  geom_line(aes(color=Hypothesis),size=1.4)+
   labs(title = NULL,
        x = "Delta Smelt objective weight",
        y = "Expected value of partial information (%)") +
@@ -286,12 +396,13 @@ plot_partial_EVPI <- ggplot(EVPI_results_combined, aes(x=fish_weight, y=percent_
         legend.position = c(0.2, 0.5),            # Position the legend
   legend.background = element_rect(color = "black"), # Legend background
   legend.key = element_rect(fill = "lightgray")) + # Legend key color
-  scale_fill_manual(values = custom_colors)     # Use a color palette
+  scale_fill_manual(values = custom_colors)  +   # Use a color palette
+  scale_color_manual(values = custom_colors)
 
-plot_partial_EVPI
+plot_partial_EVPI_line
 
 # Export plot
-tiff(filename=file.path("Output","Figure_EVPI_partial_2Objectives.tiff"),
+tiff(filename=file.path("Output","Figure_EVPI_partial_2Objectives_line.tiff"),
      type="cairo",
      units="in", 
      width=8, #10*1, 
@@ -299,7 +410,7 @@ tiff(filename=file.path("Output","Figure_EVPI_partial_2Objectives.tiff"),
      pointsize=5, #12, 
      res=300,
      compression="lzw")
-plot_partial_EVPI
+plot_partial_EVPI_line
 dev.off()
 
 #######
@@ -319,7 +430,7 @@ data_plot_water$Alternatives <- factor(data_plot_water$Alternatives, levels = c(
                                                                                 "Alt S74F80","Alt NoX2"))
 
 # Change name for AFS
-levels(data_plot_water$Alternatives)[levels(data_plot_water$Alternatives) == "Alt NoX2"] <- "Alt NoFlow"
+#levels(data_plot_water$Alternatives)[levels(data_plot_water$Alternatives) == "Alt NoX2"] <- "Alt NoFlow"
 
 # Water cost plot
 plot_bar_water <- ggplot(data_plot_water, aes(x=Alternatives, y=Score, fill=Alternatives)) +
@@ -354,7 +465,7 @@ data_plot_dsm <- dsm
 data_plot_dsm$Alternatives <- factor(data_plot_dsm$Alternatives, levels = c("Alt F80", "Alt F74", "Alt S74",
                                                                                 "Alt S74F80","Alt NoX2"))
 # Change name for AFS
-levels(data_plot_dsm$Alternatives)[levels(data_plot_dsm$Alternatives) == "Alt NoX2"] <- "Alt NoFlow"
+#levels(data_plot_dsm$Alternatives)[levels(data_plot_dsm$Alternatives) == "Alt NoX2"] <- "Alt NoFlow"
 
 # Delta Smelt obj plot
 plot_bar_dsm <- ggplot(data_plot_dsm, aes(x=Alternatives, y=Score, fill=Alternatives)) +
@@ -365,7 +476,7 @@ plot_bar_dsm <- ggplot(data_plot_dsm, aes(x=Alternatives, y=Score, fill=Alternat
   facet_grid(cols = vars(Hypothesis)) +
   scale_fill_manual(values = custom_colors_alt,guide="none")  +   # Use a color palette
   theme_bw() +                          # Classic theme 
-  coord_cartesian(ylim=c(0.75,1)) +
+  coord_cartesian(ylim=c(0.75,1.05)) +
   theme(axis.text.y = element_text(size = 14),
         axis.text.x = element_text(size = 14,angle = 45, hjust = 1),
         panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
@@ -379,7 +490,7 @@ plot_bar_dsm
 tiff(filename=file.path("Output","Figure_BarPlot_DeltaSmeltObjective.tiff"),
      type="cairo",
      units="in", 
-     width=11, #10*1, 
+     width=12, #10*1, 
      height=6, #22*1, 
      pointsize=5, #12, 
      res=300,
