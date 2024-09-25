@@ -2,7 +2,7 @@ library(tidyverse)
 
 setwd("C:/Users/bmahardja/Documents/GitHub/DeltaSmelt_SummerFallX2_VOI/Consequence_Table")
 
-cons_table <- read.csv(file.path("Data","ConsequenceTable_2024-09-10.csv"))
+cons_table <- read.csv(file.path("Data","ConsequenceTable_2024-09-25.csv"))
 
 # Standardize score based on local scale
 
