@@ -46,7 +46,7 @@ plot_scoreline <- ggplot(data=line_plot_data, aes(x=fish_weight, y=comp_score, c
   theme_minimal()+
   labs(title = NULL,
        x = "Delta Smelt objective weight",
-       y = "Composite score (objective-weighted linear value function)") +
+       y = "Utility score (objective-weighted linear value function)") +
   theme(axis.text = element_text(size = 14),  # Increase tick mark font size
   panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
   legend.text=element_text(size=14),
@@ -476,13 +476,14 @@ plot_bar_dsm <- ggplot(data_plot_dsm, aes(x=Alternatives, y=Score, fill=Alternat
   facet_grid(cols = vars(Hypothesis)) +
   scale_fill_manual(values = custom_colors_alt,guide="none")  +   # Use a color palette
   theme_bw() +                          # Classic theme 
-  coord_cartesian(ylim=c(0.75,1.05)) +
+  coord_cartesian(ylim=c(0.75,1.00)) +
   theme(axis.text.y = element_text(size = 14),
         axis.text.x = element_text(size = 14,angle = 45, hjust = 1),
         panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
         axis.title.x = element_text(size=14),
         axis.title.y = element_text(size=14),
-        strip.text = element_text(size = 14))
+        strip.text = element_text(size = 14))+
+  geom_hline(yintercept=1, linetype="dashed", color = "darkred",linewidth=1.2)
 plot_bar_dsm
 
 
