@@ -1,4 +1,5 @@
 library(tidyverse)
+rm(list=ls())
 
 setwd("C:/Users/bmahardja/Documents/GitHub/DeltaSmelt_SummerFallX2_VOI/Consequence_Table")
 
@@ -14,14 +15,14 @@ water <- cons_table %>% filter(Objective=="WaterCost") %>%
 
 
 # Hypothesis weights
-cons_table_std <- bind_rows(dsm, water) %>% mutate(hypo_weight= case_when(Hypothesis == "H1" ~ 0.2875,
-                                                                          Hypothesis == "H2" ~ 0.0875,
-                                                                          Hypothesis == "H3" ~ 0.0875,
-                                                                          Hypothesis == "H4" ~ 0.0375,
-                                                                          Hypothesis == "H5" ~ 0.2875,
-                                                                          Hypothesis == "H6" ~ 0.0875,
-                                                                          Hypothesis == "H7" ~ 0.0875,
-                                                                          Hypothesis == "H8" ~ 0.0375
+cons_table_std <- bind_rows(dsm, water) %>% mutate(hypo_weight= case_when(Hypothesis == "H1" ~ 0.207,
+                                                                          Hypothesis == "H2" ~ 0.092,
+                                                                          Hypothesis == "H3" ~ 0.062,
+                                                                          Hypothesis == "H4" ~ 0.028,
+                                                                          Hypothesis == "H5" ~ 0.338,
+                                                                          Hypothesis == "H6" ~ 0.135,
+                                                                          Hypothesis == "H7" ~ 0.098,
+                                                                          Hypothesis == "H8" ~ 0.040
                                                                           )) %>%
   mutate(score_hyp = hypo_weight*std_score) 
 
