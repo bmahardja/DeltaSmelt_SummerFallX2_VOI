@@ -1,28 +1,4 @@
----
-title: "Expected zooplankton biomass change according to salinity"
-author: "Brian Mahardja"
-date: "2024-09-10"
-output: word_document
-knit: (function(input, ...) {
-    rmarkdown::render(
-      input,
-      output_dir = "~/GitHub/DeltaSmelt_SummerFallX2_VOI/Salinity_Zooplankton_Model"
-    )
-  })
----
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = "~/GitHub/DeltaSmelt_SummerFallX2_VOI/Salinity_Zooplankton_Model")
-options(scipen=999)
-```
-
-Original script and dataset packages was written by Sam Bashevkin and can be found here: https://github.com/sbashevkin/FLOATDrought
-Models were re-built and re-purposed for the Delta Smelt Summer-Fall X2 Value of Information analysis.
-
 # Load packages
-
-```{r, message=FALSE, warning=FALSE}
 require(conflicted)
 require(MASS)
 require(dplyr)
@@ -38,61 +14,36 @@ require(mgcv)
 require(purrr)
 require(deltamapr)
 require(scales)
+require(gridExtra)
+require(grid)
+require(imputeTS)
+
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
-```
+
+setwd("~/GitHub/DeltaSmelt_SummerFallX2_VOI/Salinity_Zooplankton_Model")
+
+#Start processing the zoop data
 
 # Load and wrangle data
-Data was acquired from the 'zooper' package.
-Citation: https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0265402
+#Data was acquired from the 'zooper' package.
+#Citation: https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0265402
 
-```{r main zoop data, echo=FALSE}
 zoop_data<-Zoopsynther(Data_type="Community", Sources=c("EMP", "STN", "20mm", "FMWT"), Time_consistency = FALSE)
 
-```
-
-
-Read in zoop mass conversions using excel sheet.
-```{r zoop mass, echo=FALSE}
+#Read in zoop mass conversions using excel sheet.
 zoop_mass_conversions<-read_excel(file.path("Data","Biomass conversions.xlsx"), sheet="Micro and Meso-zooplankton") %>%
   mutate(Taxname=case_when(Taxname=="Sinocalanus"~"Sinocalanus doerrii", # Change to help this match to zoop data
                            TRUE ~ Taxname),
          Taxlifestage=paste(Taxname, Lifestage))%>%
   select(Taxlifestage, CarbonWeight_ug)
-```
 
-Read in zoop groupings
-```{r zoop group, echo=FALSE}
+#Read in zoop groupings
 zoop_groups<-read_csv(file.path("Data","zoopcrosswalk3.csv"), col_types=cols_only(Taxlifestage="c", IBMR="c"))%>%
   distinct()
 
-
-```
-
-
-Load Mysid biomass data
-```{r load mysid, echo=FALSE}
-zoop_mysid<-read_excel(file.path("Data","1972-2020MysidBPUEMatrix.xlsx"), # EMP
-                       sheet="Mysid_BPUE_matrix_1972-2020", na = "NA",
-                       col_types = c(rep("numeric", 4), "date", "text", "text", rep("text", 7), rep("numeric", 8)))%>%
-  select(Date=SampleDate, Station=StationNZ, BPUE=`Hyperacanthomysis longirostris`)%>% # Only select Hyperacanthomysis longirostris
-  mutate(Source="EMP")%>%
-  bind_rows(read_csv(file.path("Data","FMWT STN 2007to2019 Mysid BPUE.csv"), # FMWT/STN
-                     col_types=cols_only(Station="c", SampleDate="c", Project="c", `Hyperacanthomysis longirostris`="d"))%>% 
-              rename(Date=SampleDate, Source=Project, BPUE=`Hyperacanthomysis longirostris`)%>% # Only select Hyperacanthomysis longirostris
-              mutate(Date=mdy(Date),
-                     Station=recode(Station, MONT="Mont", HONK="Honk")))%>% #Get station names to match to main dataset
-  mutate(BPUE_mysid=BPUE*1000, # Convert to ug
-         Taxlifestage="Hyperacanthomysis longirostris Adult",
-         SampleID=paste(Source, Station, Date),
-         SizeClass="Macro")%>%
-  select(SampleID, Taxlifestage, SizeClass, BPUE_mysid)
-```
-
-
-Start processing the zoop data
-```{r zoop process}
+#Start processing the zoop data
 zoop_data_mass<-zoop_data%>%
   mutate(Taxlifestage=str_remove(Taxlifestage, fixed("_UnID")))%>%
   filter(
@@ -110,9 +61,8 @@ zoop_data_mass<-zoop_data%>%
                              `Pseudodiaptomus Adult`="Pseudodiaptomus forbesi Adult",
                              `Acanthocyclops vernalis Adult`="Acanthocyclops Adult"))%>%
   left_join(zoop_mass_conversions, by="Taxlifestage")%>% # Add biomass conversions
-  left_join(zoop_mysid, by=c("SampleID", "Taxlifestage", "SizeClass"))%>% # Add mysid biomass
   left_join(zoop_groups, by="Taxlifestage")%>% # Add IBMR categories
-  mutate(BPUE=if_else(Taxlifestage=="Hyperacanthomysis longirostris Adult", BPUE_mysid, CPUE*CarbonWeight_ug))%>% # Create 1 BPUE variable
+  mutate(BPUE=CPUE*CarbonWeight_ug) %>% # Create 1 BPUE variable
   filter(!is.na(BPUE) & !is.na(Latitude) & !is.na(Longitude) & !is.na(SalSurf))%>% # Removes any data without BPUE, which is currently restricted to Rotifera Adult, Copepoda Larva, and H. longirostris from STN. Also removes 20mm and EMP EZ stations without coordinates
   group_by(IBMR)%>%
   mutate(flag=if_else(all(c("Micro", "Meso")%in%SizeClass), "Remove", "Keep"))%>% # This and the next 2 lines are meant to ensure that all categories are consistent across the surveys. Since only EMP samples microzoops, only EMP data can be used for categories that include both micro and mesozoops.
@@ -133,10 +83,8 @@ zoop_data_mass<-zoop_data%>%
          Station_fac=factor(Station), # Factor station for model random effect
          across(c(SalSurf, doy), list(s=~(.x-mean(.x))/sd(.x))), # Center and standardize predictors
          BPUE_log1p=log(BPUE+1)) # log1p transform BPUE for model
-```
 
-Check sample size
-```{r samplesize, message=FALSE, warning=FALSE}
+#Check sample size
 zoop_sample_size <- zoop_data_mass %>% 
   group_by(SampleID,Year,Month,SUBREGION,Station) %>% 
   summarise(BPUE=sum(BPUE)) %>% 
@@ -145,28 +93,41 @@ zoop_sample_size <- zoop_data_mass %>%
   summarise(mean_BPUE=mean(BPUE),Samplesize=sum(Samplesize)) %>%
   filter(Year>=1995)
 
-ggplot(zoop_sample_size, aes(x=Year, y=Month, fill=Samplesize))+
+plot_samplesize <- ggplot(zoop_sample_size, aes(x=Year, y=Month, fill=Samplesize))+
   geom_tile()+
   scale_y_continuous(breaks=1:12, labels=month(1:12, label=T))+
   scale_fill_viridis_c(breaks=c(1,5,10,15,20))+
   facet_wrap(~SUBREGION)+
-  theme_bw()
-```
+  labs(fill="Sample size")+
+  theme_bw()+
+  theme(legend.key.size = unit(1.2, 'cm'))
+  
 
-All the remaining brackish regions have sufficient sample size with the exception of NE Suisun. As such, NE Suisun is to be combined with SE Suisun while the rest of the regions are to be analyzed on their own.
+plot_samplesize
 
-Create a new column with IBMR edited regions to accomodate combination of NE and SE Suisun regions.
-```{r suisun combine}
+# Export plot
+tiff(filename=file.path("Output","Figure_X2_salinity_model.tiff"),
+     type="cairo",
+     units="in", 
+     width=8, #10*1, 
+     height=6, #22*1, 
+     pointsize=5, #12, 
+     res=300,
+     compression="lzw")
+plot_samplesize
+dev.off()
+
+####
+#All the remaining brackish regions have sufficient sample size with the exception of NE Suisun. As such, NE Suisun is to be combined with SE Suisun while the rest of the regions are to be analyzed on their own.
+
+#Create a new column with IBMR edited regions to accomodate combination of NE and SE Suisun regions.
 zoop_data_mass$Subregion_edit<-ifelse(zoop_data_mass$SUBREGION%in%c("NE Suisun", "SE Suisun"), "East Suisun", zoop_data_mass$SUBREGION)
-
-```
 
 # Model
 
 ## Prediction data
 
-Set up prediction data for model
-```{r setup predict}
+#Set up prediction data for model
 # Min year to start models
 year_min<-1995
 
@@ -198,11 +159,9 @@ newdata_function<-function(region, data=zoop_data_mass, quant=0.99){
 }
 
 newdata<-map(set_names(unique(zoop_data_mass$Subregion_edit)), newdata_function)
-```
 
 ## Posterior prediction function
 
-```{r posterior predict}
 # Function to generate posterior predictions from a gam model
 # From https://stats.stackexchange.com/questions/190348/can-i-use-bootstrapping-to-estimate-the-uncertainty-in-a-maximum-value-of-a-gam
 predict_posterior<-function(model, newdata, exclude, n=1e3, seed=999){
@@ -220,13 +179,153 @@ predict_posterior<-function(model, newdata, exclude, n=1e3, seed=999){
   pred<-as_tibble(pred)
   return(pred)
 }
-```
 
 ## Model fitting
 
-model
-```{r}
-sal_model<-function(group,region,new_data=newdata){
+sal_model <- function(group, region, new_data = newdata) {
+  
+  cat("<<<<<<<<<<<<<<<<<<<<<<< modeling", group, region, ">>>>>>>>>>>>>>>>>>>>>>>>>\n\n")
+  
+  new_data <- new_data[[region]]
+  
+  data <- filter(zoop_data_mass, IBMR == group & Subregion_edit == region & Year >= year_min)
+  
+  png(filename = paste0("plot_", group, "_", region, ".png"), width = 1200, height = 800)
+  par(mfrow = c(2, 2))
+  
+  model_list <- list()  # Create an empty list to store models
+  
+  if (length(unique(data$Station_fac)) > 1) {
+    model <- gam(BPUE_log1p ~ te(SalSurf_s, doy_s, k = c(5, 5), bs = c("cs", "cc")) + 
+                   s(Year_fac, bs = "re") + s(Station_fac, bs = "re"),
+                 data = data, 
+                 method = "REML")
+    
+    random_effects <- c("s(Year_fac)", "s(Station_fac)")
+    
+  } else {
+    
+    model <- gam(BPUE_log1p ~ te(SalSurf_s, doy_s, k = c(5, 5), bs = c("cs", "cc")) + 
+                   s(Year_fac, bs = "re"),
+                 data = data, 
+                 method = "REML")
+    
+    random_effects <- c("s(Year_fac)")
+  }
+  
+  cat("-------------gam check-------------\n")
+  gam.check(model)
+  
+  cat("\n\n-------------summary-------------\n")
+  print(summary(model))
+  
+  # Append the model to the list
+  model_list[[paste0("model_", region)]] <- model
+  
+  dev.off()  # Close the png device
+  
+  return(model_list)
+}
+
+# Create model combinations
+model_factors <- expand_grid(IBMR = unique(zoop_data_mass$IBMR),
+                             Subregion_edit = unique(zoop_data_mass$Subregion_edit)) %>%
+  mutate(IBMR = set_names(IBMR, paste(IBMR, Subregion_edit))) %>%
+  # Remove mysid
+  filter(IBMR!="mysid")
+
+
+################### Deviate from Sam's code here
+# Create a list of models for summary statistics
+# Modify pmap to handle the list of models and convert to a tibble
+models_list <- pmap(model_factors, function(IBMR, Subregion_edit) {
+  model_output <- sal_model(IBMR, Subregion_edit)
+  model_name <- paste(IBMR, Subregion_edit, sep = " ")
+  tibble(model_name = model_name, model = list(model_output[[1]]))
+})
+
+# Combine the list of tibbles into a single tibble
+models_tibble <- bind_rows(models_list)
+
+models_tibble_renamed <- models_tibble %>%
+  mutate(IBMR = sapply(model_name, function(x) str_split(x, " ", n = 2)[[1]][1]),
+         Region = factor(sapply(model_name, function(x) str_split(x, " ", n = 2)[[1]][2]),
+                         levels = c("Confluence", "Suisun Marsh", "East Suisun", 
+                                    "NW Suisun", "SW Suisun"))) %>%
+  select(-model_name) %>%
+  relocate(Region, IBMR)
+
+# Create a list of model summary
+
+model_summary <- models_tibble_renamed %>%
+  mutate(r.sq = sapply(model, function(m) summary(m)$r.sq))%>%
+  select(Region, IBMR, r.sq)
+
+#### Summary statistics for the zoop appendix text
+# Can check min, max, and median here
+min(model_summary$r.sq)
+max(model_summary$r.sq)
+median(model_summary$r.sq)
+
+# Reorder the factor levels
+model_summary$Region <- factor(model_summary$Region, levels = c("SW Suisun", "NW Suisun","East Suisun","Suisun Marsh", "Confluence"))
+
+# Create summary R2 table
+table_r2 <- model_summary %>% spread(Region,r.sq) %>% rename('Taxonomic Group'=IBMR)
+
+# Export R2 table in case we need it
+write.csv(table_r2,file.path("Output","salinity-zoop_model_R2.csv"),row.names=T)
+
+#### Observed vs fitted
+# Create a function to generate Plot for Observed vs Fitted
+plot_observed_vs_fitted <- function(model, model_name) {
+  # Get fitted values and observed values
+  fitted_values <- fitted(model)
+  observed_values <- model$model[[1]]  # Assuming the response variable is the first column
+  
+  # Create a data frame for plotting
+  plot_data <- data.frame(Observed = observed_values, Fitted = fitted_values)
+  
+  # Generate the plot
+  p <- ggplot(plot_data, aes(x = Fitted, y = Observed)) +
+    geom_point() +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +  # 1:1 line
+    labs(x = "Fitted Values", y = "Observed Values") +
+    theme_minimal() +
+    theme(axis.title.x = element_blank(),  # Remove x-axis title
+          axis.title.y = element_blank())  # Remove y-axis title)  # Center the title
+  
+  return(p)
+}
+
+# List to store plots
+plots_list <- list()
+
+# Loop through each model in models_tibble and generate the plots
+for (i in seq_along(models_tibble$model)) {
+  model <- models_tibble$model[[i]]
+  model_name1 <- paste(models_tibble$IBMR[i], models_tibble$Region[i])
+  
+  # Generate the plot and store it in the list
+  plots_list[[i]] <- plot_observed_vs_fitted(model, model_name1)
+}
+
+# Create a list to hold grobs with titles
+grobs_with_titles <- lapply(seq_along(plots_list), function(i) {
+  arrangeGrob(plots_list[[i]], top = textGrob(paste(sal_conversions$IBMR[i], sal_conversions$Region[i]), gp = gpar(fontsize = 10)))
+})
+
+# Save the PNG output as a TIFF file with LZW compression
+tiff(filename=file.path("Output","Figure_observed_vs_fitted.tiff"), width = 12, height = 16, units = "in", res = 300, compression = "lzw")
+grid.arrange(grobs = grobs_with_titles, nrow = 11, ncol = 5,
+             left = textGrob("Observed Values", rot = 90, gp = gpar(fontsize = 14)),
+             bottom = textGrob("Fitted Values", gp = gpar(fontsize = 14)))
+dev.off()  # Close the graphics device
+
+##############
+# Back to Sam's code, re-run model to extract just prediction and plot the prediction figures
+# Sam's original sal_model function
+sal_model_original<-function(group,region,new_data=newdata){
   
   cat("<<<<<<<<<<<<<<<<<<<<<<< modeling", group, region, ">>>>>>>>>>>>>>>>>>>>>>>>>\n\n")
   
@@ -266,15 +365,10 @@ sal_model<-function(group,region,new_data=newdata){
               .)
   return(sal)
 }
-```
 
-Apply model to all groups and regions
-```{r}
-model_factors<-expand_grid(IBMR=unique(zoop_data_mass$IBMR),
-                           Subregion_edit=unique(zoop_data_mass$Subregion_edit))%>%
-  mutate(IBMR=set_names(IBMR, paste(IBMR, Subregion_edit)))
+#Apply model to all groups and regions
 
-sal_conversions<-pmap_dfr(model_factors, function(IBMR, Subregion_edit) sal_model(IBMR, Subregion_edit), .id = "IBMR_region")%>%
+sal_conversions<-pmap_dfr(model_factors, function(IBMR, Subregion_edit) sal_model_original(IBMR, Subregion_edit), .id = "IBMR_region")%>%
   mutate(IBMR=sapply(IBMR_region, function(x) str_split(x, " ", n=2)[[1]][1]),
          Region=factor(sapply(IBMR_region, function(x) str_split(x, " ", n=2)[[1]][2]),
                        levels=c("Confluence", "Suisun Marsh", "East Suisun", 
@@ -285,11 +379,6 @@ sal_conversions<-pmap_dfr(model_factors, function(IBMR, Subregion_edit) sal_mode
 
 sal_conversions
 
-```
-
-Plot salinity-biomass relationships
-```{r, fig.width=12, fig.height=8}
-
 sal_conversions_sum<-apply(select(sal_conversions, starts_with("draw_")), 1, 
                            function(x) quantile(x, c(0.025, 0.5, 0.975)))
 
@@ -298,6 +387,7 @@ sal_conversions_plot<-sal_conversions%>%
   bind_cols(tibble(l95=sal_conversions_sum["2.5%",], 
                    median=sal_conversions_sum["50%",], 
                    u95=sal_conversions_sum["97.5%",]))
+
 plot_sal_conversions<-function(group, data=sal_conversions_plot){
   
   if(group!="All"){
@@ -307,6 +397,7 @@ plot_sal_conversions<-function(group, data=sal_conversions_plot){
       geom_line()+
       geom_ribbon(alpha=0.4, fill="chartreuse4")+
       ylab("Zooplankton biomass (log scale)")+
+      ggtitle(paste(data$IBMR)) +
       facet_grid(Region~month(Month, label=T))+
       theme_bw()+
       theme(axis.text.x=element_text(angle=45, hjust=1))
@@ -321,45 +412,37 @@ plot_sal_conversions<-function(group, data=sal_conversions_plot){
       theme(axis.text.x=element_text(angle=45, hjust=1))
   }
 }
-```
 
-```{r}
 # Create plots for each IBMR group
 sal_conversion_plots <- tibble(group=c("All", unique(model_factors$IBMR)))%>%
   mutate(plot=map(group, plot_sal_conversions))
-```
 
-## Salinity-biomass plots {.tabset .tabset-pills}
-
-```{r, echo = FALSE, results = "asis", fig.width = 8, fig.height = 7}
+# Export salinity-biomass plots
 for (i in 1:nrow(sal_conversion_plots)) {
   # Create subheadings for each Parameter
   cat("### ", as.character(sal_conversion_plots$group[i]), "\n\n")
-  # Print plot
+  # Export plot
+  tiff(filename=file.path("Output",paste("Figure_predict_",as.character(sal_conversion_plots$group[i]),".tiff",sep="")), width = 16, height = 12, units = "in", res = 300, compression = "lzw")
   print(sal_conversion_plots$plot[[i]])
-  cat("\n\n")
+  dev.off()  # Close the graphics device
 }
-```
 
+#############
 # Read salinity data
 
-```{r, message=FALSE}
 salinity_data<-read.csv(file.path("Data","converted_salinity_data.csv"))
 
 #Original file from CSAMP SDM
 original_scenario_file<-read.csv(file.path("Data","base_salinity_data_for_X2salmodel.csv")) %>% select(c(2:5))  %>% rename(sal_base=sal) %>%
-    add_row(year = 1997, month=1, region = "NE Suisun", sal_base=0.217891455)
+  add_row(year = 1997, month=1, region = "NE Suisun", sal_base=0.217891455)
 
 #Join the two datasets
 scenario_file <- original_scenario_file  %>% left_join(salinity_data)
 
-```
-
 
 # Apply model
 
-Load in the modeled salinity
-```{r, message=FALSE}
+#Load in the modeled salinity
 scenario_names<-tibble(name=colnames(scenario_file))%>%
   filter(str_detect(name, "sal_"))%>%
   rev()
@@ -377,21 +460,21 @@ scenario_sal<-scenario_file%>%
                          levels=scenario_names$name),
          Salinity=round(Salinity, 1))
 
-```
-
-Plot modeled salinity
-```{r, fig.width=12, fig.height=8}
-ggplot(scenario_sal, 
-       aes(x=year, y=Salinity, color=Scenario))+
+# Plot modeled salinity
+plot_salinity_scenario<- ggplot(scenario_sal, 
+      aes(x=year, y=Salinity, color=Scenario))+
   geom_line()+
   scale_color_viridis_d(direction=-1)+
   facet_grid(region ~ month(month, label=T))+
   theme_bw()+
   theme(legend.position = "bottom", axis.text.x=element_text(angle=45, hjust=1))
-```
 
-Calculate zoop abundance difference between each scenario and the baseline 
-```{r}
+# Export plot
+tiff(filename=file.path("Output","Figure_Salinity_scenario_comparison.tiff"), width = 16, height = 12, units = "in", res = 300, compression = "lzw")
+plot_salinity_scenario
+dev.off()  # Close the graphics device
+
+#Calculate zoop abundance difference between each scenario and the baseline 
 
 zoop_saladjusted<-scenario_sal%>%
   mutate(Salinity=as.character(Salinity),
@@ -420,73 +503,99 @@ zoop_saladjusted<-scenario_sal%>%
                         u95=~quantile(.x, 0.975, na.rm=T))), 
             .groups="drop")
 
-write_csv(zoop_saladjusted, file.path("Output","zoop sal adjustments.csv"))
-```
+# Write it out as csv. Removed as to not interfere with the Rmd file
+#write_csv(zoop_saladjusted, file.path("Output","zoop sal adjustments.csv"))
 
+
+####
 ## Prepare plots
 
-Plot the missing model results resulting from out-of-range salinity values in the inputs
-```{r, fig.width=12, fig.height=16}
+#Plot the missing model results resulting from out-of-range salinity values in the inputs
 missing_adjusted_data<-zoop_saladjusted%>%
   select(-ends_with("l95"), -ends_with("u95"))%>%
   filter(IBMR=="acartela")%>%
   pivot_longer(cols=starts_with("sal_"), names_to="Scenario", values_to="zoop_change")%>%
   mutate(Scenario=str_remove(Scenario, fixed("_median")))
 
-ggplot(missing_adjusted_data,
+plot_missing_data <- ggplot(missing_adjusted_data,
        aes(x=year, y=Scenario, fill=is.na(zoop_change)))+
   geom_tile()+
   scale_fill_viridis_d(name="Are the model results missing due to out-of-range salinity values?")+
   facet_grid(region ~ month(month, label=T))+
   theme_bw()+
   theme(legend.position = "bottom", axis.text.x=element_text(angle=45, hjust=1))
-```
 
-Plot the result
+# Export plot
+tiff(filename=file.path("Output","Figure_Out_of_range_salinity_value.tiff"), width = 16, height = 12, units = "in", res = 300, compression = "lzw")
+plot_missing_data
+dev.off()  # Close the graphics device
 
-Create some plotting functions
-```{r plot funcs}
-neglop1p<-trans_new("neglop1p", transform=function(x) sign(x)*log(abs(x)+1), inverse=function(x) sign(x)*(exp(abs(x))-1))
-plot_scenario_result <- function(scenario, group) {
-  
-  plot_data<-zoop_saladjusted%>%
-    filter(IBMR%in%group)
-  
-  ggplot(plot_data,
-         aes(x=year, y=.data[[paste0(scenario, "_median")]], ymin=.data[[paste0(scenario, "_l95")]], ymax=.data[[paste0(scenario, "_u95")]]))+
-    geom_ribbon(alpha=0.4, fill="darkorchid4")+
-    geom_line(alpha=0.4, color="darkorchid4")+
-    scale_y_continuous(trans=neglop1p, breaks=c(-1000, -100, -10, -1, 0, 1, 10, 100, 1000))+
-    ylab("Scenario/baseline (log scale)")+
-    facet_grid(region ~ month(month, label=T))+
-    theme_bw()+
-    theme(legend.position = "bottom", axis.text.x=element_text(angle=45, hjust=1))
+##########
+# Impute infinity and N/A with linear interpolation
+
+#When 0s were introduced for baseline predictions, it resulted in infinite values for the scalars. 
+#We replaced these infinities with linear interpolations from the time series of model predictions for a specific alternative, taxon, and subregion. 
+#This step yielded no more infinite scalar values.
+
+## Impute data using linear interpolation
+
+# Change inf and NaN to NA
+zoop_saladjusted[sapply(zoop_saladjusted, is.infinite)] <- NA
+zoop_saladjusted[sapply(zoop_saladjusted, is.nan)] <- NA
+
+
+# Split data into list
+zoop_model_data_arranged_median <- zoop_saladjusted %>% 
+  arrange(year, month) %>%
+  select("region","year","month","IBMR",ends_with("median")) %>%
+  gather("scenario","value",ends_with("median"))
+
+zoop_model_data_median_split <- split(zoop_model_data_arranged_median , list(zoop_model_data_arranged_median$region,zoop_model_data_arranged_median$IBMR))
+
+# Impute data using linear interpolation
+for(i in seq_along(zoop_model_data_median_split)){ 
+  zoop_model_data_median_split[[i]]$value <- na_interpolation(zoop_model_data_median_split[[i]]$value)
 }
-```
 
-```{r create plots}
-# Create plots for each Parameter
-scenario_result_plots <- expand_grid(Scenario=unique(scenario_sal$Scenario)[-1],
-                                     IBMR=unique(model_factors$IBMR))%>%
-  mutate(plot=map2(Scenario, IBMR, ~plot_scenario_result(.x, .y)))
-```
+# Rejoin into a single data frame
+zoop_model_data_median_imputed<-bind_rows(zoop_model_data_median_split) %>%
+  mutate(Date=as.Date(paste(year,month,"01",sep="-")))
 
-## Result plots {.tabset .tabset-pills}
+ggplot(data=zoop_model_data_median_imputed %>% filter(region=="NW Suisun")) + geom_line(aes(x=Date,y=value,color=scenario),alpha=0.5) + theme_bw() + facet_wrap(~IBMR, scales = "free")
 
-```{r print plots, echo = FALSE, results = "asis", fig.width = 8, fig.height = 7}
-for (i in 1:length(unique(scenario_result_plots$Scenario))) {
-  # Create subheadings for each Parameter
-  cat("### ", as.character(unique(scenario_result_plots$Scenario)[i]), " {.tabset .tabset-pills}", "\n\n")
-  
-  for (j in 1:length(unique(scenario_result_plots$IBMR))) {
-    # Create subheadings for each Parameter
-    cat("#### ", as.character(unique(scenario_result_plots$IBMR)[j]), "\n\n")
-    
-    p<-filter(scenario_result_plots, IBMR==unique(scenario_result_plots$IBMR)[j] & Scenario==unique(scenario_result_plots$Scenario)[i])$plot[[1]]
-    # Print plot
-    print(p)
-    cat("\n\n")
-  }
+unique(zoop_model_data_median_imputed$scenario)
+# Get the data adjusted for plotting
+baseline_nox2 <- zoop_model_data_median_imputed %>% filter(scenario=="sal_AltNoX2_median") %>%
+  select(region,year,month,IBMR,value) %>% rename(baseline=value)
+
+zoop_model_data_median_imputed_plot <- zoop_model_data_median_imputed %>% filter(scenario!="sal_base_median") %>%
+  # Remove years that are not present in IBMR input
+  filter(year %in% c(1995:2014)) %>% 
+  mutate(scenario = case_when(scenario=="sal_AltF74_median" ~ "F74",
+                              scenario=="sal_AltF80_median" ~ "F80",
+                              scenario=="sal_AltS74_median" ~ "S74",
+                              scenario=="sal_AltS74F80_median" ~ "S74F80",
+                              scenario=="sal_AltNoX2_median" ~ "No X2",)) %>% left_join(baseline_nox2) %>%
+  mutate(change_scalar_to_baseline = value/baseline) %>%
+  filter(scenario!="No X2")
+
+# Export final imputed data
+categories <- unique(zoop_model_data_median_imputed_plot$IBMR)
+
+color_combo <- c("#00008B","#8B0046","#E6AB02","#008B00")
+
+for (category in categories) {
+  tiff(filename=file.path("Output",paste("Figure_scalar_",category,".tiff",sep="")), width = 12, height = 9, units = "in", res = 300, compression = "lzw")
+  p<-ggplot(data=zoop_model_data_median_imputed_plot %>% filter(IBMR==category)) + 
+    geom_line(aes(x=Date,y=change_scalar_to_baseline,color=scenario),size=1,alpha=0.7) + 
+    ggtitle(paste(category))+
+    ylab("Proportional change relative to No X2 alternative")+
+    theme_bw() + 
+    scale_color_manual(values=color_combo) +
+    theme(axis.title.x=element_blank()) +
+    labs(color="Alternative")+
+    facet_wrap(~region, scales = "free")
+  print(p)
+  dev.off()  # Close the graphics device
 }
-```
 

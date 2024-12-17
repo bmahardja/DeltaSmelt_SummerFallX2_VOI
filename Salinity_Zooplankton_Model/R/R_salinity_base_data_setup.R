@@ -111,7 +111,7 @@ p.sal6 <- ggplot(pred_data, aes(x=X2,y=sal)) +
   geom_point(size=0.4, alpha=0.5) +
   geom_line(data=pred_data, aes(x = X2, y = pred_m6, group=month_f), size=0.7, color="red", alpha=0.5) +
   labs(x= "X2",y="Salinity (PSU)") + 
-  scale_x_continuous(breaks=c(seq(44,95,length.out=9))) + facet_wrap(~region_f) +
+  scale_x_continuous(breaks=c(seq(44,94,10))) + facet_wrap(~region_f) +
   theme_classic() + theme(panel.background = element_rect(color="black"),
                           axis.text.y=element_text(size=11),axis.text.x=element_text(size=11),axis.title=element_text(size=12,face="bold"),
                           legend.position=c(0.1,0.9),legend.title=element_blank(), plot.margin=unit(c(0.3,0.6,0.4,0.4),"cm"))
