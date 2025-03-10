@@ -8,7 +8,7 @@ require(deltamapr)
 require(ggrepel)
 require(cowplot)
 
-setwd("C:/Users/bmahardja/Documents/GitHub/DeltaSmelt_SummerFallX2_VOI/Figures")
+setwd("C:/Users/bmahardja/Documents/GitHub/DeltaSmelt_SummerFallX2_VOI/Figures/Map")
 
 #Add crs for lat and long
 crsLONGLAT <- "+proj=longlat +datum=WGS84 +no_defs"
@@ -38,26 +38,38 @@ line_sf <- st_sf(geometry = st_sfc(st_linestring(line_coords), crs = 4326))
 Ocean<-st_read("GIS_ADMIN_OCEAN_BAY.shp") %>% filter(LANDNAME=="Pacific Ocean")
 
 #Create polygon for Suisun Bay and Marsh
-Suisun <- R_EDSM_Strata_19P3 %>% filter(Stratum %in% c("Suisun Marsh","Suisun Bay"))
-
+SuisunMarsh <- R_EDSM_Subregions_Mahardja_FLOAT %>% filter(SubRegion %in% c("Suisun Marsh"))
+test<-R_EDSM_Subregions_Mahardja_FLOAT
+SuisunBay <- R_EDSM_Subregions_Mahardja_FLOAT %>% filter(SubRegion %in% c("Mid Suisun Bay", "Grizzly Bay","Honker Bay","West Suisun Bay")) %>% st_union()
+  
+Delta <- R_Delta
 #Create label for certain regions
 DT = data.frame(
-  lat=c(38.201114, 38.066950, 38.046551,37.81934),
-  long=c(-121.993206, -122.007843, -121.604598,-122.4778),
-  name=c("Suisun Marsh","Suisun Bay","Sacramento-San Joaquin Delta","Golden Gate Bridge")
+  lat=c(38.201114, 38.066950, 38.046551,37.81934,38.187636),
+  long=c(-121.993206, -122.007843, -121.604598,-122.4778,-121.975941),
+  name=c("Suisun Marsh","Suisun Bay","Sacramento-San Joaquin Delta","Golden Gate Bridge","Belden's Landing")
 )
 
 DT = st_as_sf(DT, coords = c("long","lat"), remove = FALSE,crs=crsLONGLAT)
 
+PT<-data.frame(
+  lat=c(38.187636),
+  long=c(-121.975941),
+  name=c("Belden's Landing")
+)
+PT = st_as_sf(PT, coords = c("long","lat"), remove = FALSE,crs=crsLONGLAT)
 
 
 fig1<-ggplot() + theme_bw()+
-  geom_sf(data = WW_Delta, fill="cadetblue2", color="cadetblue2") +
-  geom_sf(data = Ocean, fill="cadetblue2", color="cadetblue2") +
-  geom_sf(data = Suisun, alpha=0,linetype="dashed",size=0.7) +
+  geom_sf(data = Ocean, fill="deepskyblue", color="deepskyblue") +
+  geom_sf(data = SuisunMarsh, alpha=0.5,color="black",fill="black",size=2) +
+  geom_sf(data = Delta, alpha=0.5,color="grey",fill="grey",size=2) +
+  geom_sf(data = SuisunBay, alpha=0.5,color="blue",fill="blue",size=2) +
+  geom_sf(data = WW_Delta, fill="deepskyblue", color="deepskyblue") +
   #geom_sf(data = R_DSIBM, fill=NA, color="grey",alpha=0.1, size=2) +
   geom_sf(data=P_X2_data)+
   geom_sf(data=line_sf)+
+  geom_sf(data=PT)+
   geom_sf_text(data = P_X2_data, 
                aes( label = RKI),vjust = 1.4,hjust=0.3)+
   coord_sf(xlim = c(-122.5, -121.4), ylim = c(37.65, 38.61),crs=crsLONGLAT)+
