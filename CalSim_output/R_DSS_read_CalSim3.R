@@ -82,15 +82,15 @@ dss_data_pull<-function(dss_input="D:\\2023-01-06 - CalSim3 example file for ReR
   #Old and Middle River flow (OMR)
   java.OMR <- dssFile$get("/CALSIM/C_OMR014/CHANNEL//1MON/L2020A/") 
   OMR=data.frame(Date=java.OMR$times %>% from_time_stamp,OMR=java.OMR$values)
-  #Montezuma salinity (previous month)
-  java.MTZ <- dssFile$get("/CALSIM/MTZ_EC_7DAY/SALINITY//1MON/L2020A/") 
-  MTZ = data.frame(Date=java.MTZ$times %>% from_time_stamp, MTZ_EC_prev=java.MTZ$values)
+  #Belden's Landing salinity (previous month)
+  java.BD <- dssFile$get("/CALSIM/BD_EC_Month/SALINITY//1MON/L2020A/") 
+  BD = data.frame(Date=java.BD$times %>% from_time_stamp, BD_EC_prev=java.BD$values)
   #X2 (previous month)
   java.X2 <- dssFile$get("/CALSIM/X2_PRV/X2-POSITION-PREV//1MON/L2020A/") 
   X2=data.frame(Date=java.X2$times %>% from_time_stamp,X2_prev=java.X2$values)
   
-  final_data_frame= OUTFLOW %>% left_join(OMR) %>% left_join(MTZ) %>% left_join(X2) %>%
-    mutate(X2_current=lead(X2_prev,n=1),MTZ_EC_current=lead(MTZ_EC_prev,n=1))
+  final_data_frame= OUTFLOW %>% left_join(OMR) %>% left_join(BD) %>% left_join(X2) %>%
+    mutate(X2_current=lead(X2_prev,n=1),BD_EC_current=lead(BD_EC_prev,n=1))
   return(final_data_frame)
 }
 

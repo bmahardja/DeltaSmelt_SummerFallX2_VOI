@@ -106,7 +106,7 @@ plot_samplesize <- ggplot(zoop_sample_size, aes(x=Year, y=Month, fill=Samplesize
 plot_samplesize
 
 # Export plot
-tiff(filename=file.path("Output","Figure_X2_salinity_model.tiff"),
+tiff(filename=file.path("Output","Figure_SampleSize.tiff"),
      type="cairo",
      units="in", 
      width=8, #10*1, 
@@ -189,9 +189,6 @@ sal_model <- function(group, region, new_data = newdata) {
   new_data <- new_data[[region]]
   
   data <- filter(zoop_data_mass, IBMR == group & Subregion_edit == region & Year >= year_min)
-  
-  png(filename = paste0("plot_", group, "_", region, ".png"), width = 1200, height = 800)
-  par(mfrow = c(2, 2))
   
   model_list <- list()  # Create an empty list to store models
   
@@ -312,7 +309,7 @@ for (i in seq_along(models_tibble$model)) {
 
 # Create a list to hold grobs with titles
 grobs_with_titles <- lapply(seq_along(plots_list), function(i) {
-  arrangeGrob(plots_list[[i]], top = textGrob(paste(sal_conversions$IBMR[i], sal_conversions$Region[i]), gp = gpar(fontsize = 10)))
+  arrangeGrob(plots_list[[i]], top = textGrob(paste(models_tibble_renamed$IBMR[i], models_tibble_renamed$Region[i]), gp = gpar(fontsize = 10)))
 })
 
 # Save the PNG output as a TIFF file with LZW compression
@@ -357,7 +354,7 @@ sal_model_original<-function(group,region,new_data=newdata){
   gam.check(model)
   
   cat("\n\n-------------summary-------------\n")
-  print(summary(model))
+  summary(model)
   
   sal<-predict_posterior(model, new_data, random_effects)%>%
     bind_cols(new_data%>% # Add covariate columns before these columns
@@ -377,7 +374,6 @@ sal_conversions<-pmap_dfr(model_factors, function(IBMR, Subregion_edit) sal_mode
   select(-IBMR_region, -doy)%>%
   relocate(Region, Month, IBMR, SalSurf)
 
-sal_conversions
 
 sal_conversions_sum<-apply(select(sal_conversions, starts_with("draw_")), 1, 
                            function(x) quantile(x, c(0.025, 0.5, 0.975)))
@@ -397,6 +393,7 @@ plot_sal_conversions<-function(group, data=sal_conversions_plot){
       geom_line()+
       geom_ribbon(alpha=0.4, fill="chartreuse4")+
       ylab("Zooplankton biomass (log scale)")+
+      xlab("Salinity")+
       ggtitle(paste(data$IBMR)) +
       facet_grid(Region~month(Month, label=T))+
       theme_bw()+
@@ -422,7 +419,7 @@ for (i in 1:nrow(sal_conversion_plots)) {
   # Create subheadings for each Parameter
   cat("### ", as.character(sal_conversion_plots$group[i]), "\n\n")
   # Export plot
-  tiff(filename=file.path("Output",paste("Figure_predict_",as.character(sal_conversion_plots$group[i]),".tiff",sep="")), width = 16, height = 12, units = "in", res = 300, compression = "lzw")
+  tiff(filename=file.path("Output",paste("Figure_predict_",as.character(sal_conversion_plots$group[i]),".tiff",sep="")), width = 10, height = 7, units = "in", res = 300, compression = "lzw")
   print(sal_conversion_plots$plot[[i]])
   dev.off()  # Close the graphics device
 }
@@ -470,7 +467,7 @@ plot_salinity_scenario<- ggplot(scenario_sal,
   theme(legend.position = "bottom", axis.text.x=element_text(angle=45, hjust=1))
 
 # Export plot
-tiff(filename=file.path("Output","Figure_Salinity_scenario_comparison.tiff"), width = 16, height = 12, units = "in", res = 300, compression = "lzw")
+tiff(filename=file.path("Output","Figure_Salinity_scenario_comparison.tiff"), width = 8, height = 6, units = "in", res = 300, compression = "lzw")
 plot_salinity_scenario
 dev.off()  # Close the graphics device
 
@@ -511,14 +508,21 @@ zoop_saladjusted<-scenario_sal%>%
 ## Prepare plots
 
 #Plot the missing model results resulting from out-of-range salinity values in the inputs
-missing_adjusted_data<-zoop_saladjusted%>%
-  select(-ends_with("l95"), -ends_with("u95"))%>%
+missing_adjusted_data<-zoop_saladjusted %>%
+  select(-ends_with("l95"), -ends_with("u95")) %>%
   filter(IBMR=="acartela")%>%
   pivot_longer(cols=starts_with("sal_"), names_to="Scenario", values_to="zoop_change")%>%
-  mutate(Scenario=str_remove(Scenario, fixed("_median")))
+  mutate(Scenario=str_remove(Scenario, fixed("_median"))) %>% filter(Scenario!="sal_base") %>%
+  # Remove years that are not present in IBMR input
+  filter(year %in% c(1995:2014)) %>% 
+  mutate(scenario = case_when(Scenario=="sal_AltF74" ~ "F74",
+                              Scenario=="sal_AltF80" ~ "F80",
+                              Scenario=="sal_AltS74" ~ "S74",
+                              Scenario=="sal_AltS74F80" ~ "S74F80",
+                              Scenario=="sal_AltNoX2" ~ "No X2",)) 
 
 plot_missing_data <- ggplot(missing_adjusted_data,
-       aes(x=year, y=Scenario, fill=is.na(zoop_change)))+
+       aes(x=year, y=scenario, fill=is.na(zoop_change)))+
   geom_tile()+
   scale_fill_viridis_d(name="Are the model results missing due to out-of-range salinity values?")+
   facet_grid(region ~ month(month, label=T))+
@@ -526,7 +530,7 @@ plot_missing_data <- ggplot(missing_adjusted_data,
   theme(legend.position = "bottom", axis.text.x=element_text(angle=45, hjust=1))
 
 # Export plot
-tiff(filename=file.path("Output","Figure_Out_of_range_salinity_value.tiff"), width = 16, height = 12, units = "in", res = 300, compression = "lzw")
+tiff(filename=file.path("Output","Figure_Out_of_range_salinity_value.tiff"), width = 10, height = 7, units = "in", res = 300, compression = "lzw")
 plot_missing_data
 dev.off()  # Close the graphics device
 
@@ -561,9 +565,8 @@ for(i in seq_along(zoop_model_data_median_split)){
 zoop_model_data_median_imputed<-bind_rows(zoop_model_data_median_split) %>%
   mutate(Date=as.Date(paste(year,month,"01",sep="-")))
 
-ggplot(data=zoop_model_data_median_imputed %>% filter(region=="NW Suisun")) + geom_line(aes(x=Date,y=value,color=scenario),alpha=0.5) + theme_bw() + facet_wrap(~IBMR, scales = "free")
-
 unique(zoop_model_data_median_imputed$scenario)
+
 # Get the data adjusted for plotting
 baseline_nox2 <- zoop_model_data_median_imputed %>% filter(scenario=="sal_AltNoX2_median") %>%
   select(region,year,month,IBMR,value) %>% rename(baseline=value)
@@ -577,25 +580,62 @@ zoop_model_data_median_imputed_plot <- zoop_model_data_median_imputed %>% filter
                               scenario=="sal_AltS74F80_median" ~ "S74F80",
                               scenario=="sal_AltNoX2_median" ~ "No X2",)) %>% left_join(baseline_nox2) %>%
   mutate(change_scalar_to_baseline = value/baseline) %>%
-  filter(scenario!="No X2")
+  filter(scenario!="No X2") %>%
+  filter(region!="NE Suisun") %>% mutate(region = case_when(region=="SE Suisun" ~ "East Suisun", .default = as.character(region))) %>% 
+  mutate(region= as.factor(region),scenario=as.factor(scenario))
 
-# Export final imputed data
-categories <- unique(zoop_model_data_median_imputed_plot$IBMR)
+summary(zoop_model_data_median_imputed_plot)
+# Plot change in zoop abundance relative to the No X2 alternative
 
-color_combo <- c("#00008B","#8B0046","#E6AB02","#008B00")
+plot_F74_relative<-ggplot(data=zoop_model_data_median_imputed_plot %>% filter(scenario=="F74")) + 
+  geom_line(aes(x=Date,y=change_scalar_to_baseline),linewidth=1) + 
+  ylab("Proportional change relative to No X2 alternative")+
+  theme_bw() + 
+  theme(axis.title.x=element_blank(),axis.text.x = element_text(angle = 45,hjust=1)) +
+  labs(color="Alternative")+
+  facet_grid(IBMR~region, scales = "free")+
+  ggtitle("Fall X2 action at 74 km Alternative")
 
-for (category in categories) {
-  tiff(filename=file.path("Output",paste("Figure_scalar_",category,".tiff",sep="")), width = 12, height = 9, units = "in", res = 300, compression = "lzw")
-  p<-ggplot(data=zoop_model_data_median_imputed_plot %>% filter(IBMR==category)) + 
-    geom_line(aes(x=Date,y=change_scalar_to_baseline,color=scenario),size=1,alpha=0.7) + 
-    ggtitle(paste(category))+
-    ylab("Proportional change relative to No X2 alternative")+
-    theme_bw() + 
-    scale_color_manual(values=color_combo) +
-    theme(axis.title.x=element_blank()) +
-    labs(color="Alternative")+
-    facet_wrap(~region, scales = "free")
-  print(p)
-  dev.off()  # Close the graphics device
-}
+tiff(filename=file.path("Output","Figure_relative_F74.tiff"), width = 9, height = 12, units = "in", res = 300, compression = "lzw")
+plot_F74_relative
+dev.off()  # Close the graphics device
 
+plot_F80_relative<-ggplot(data=zoop_model_data_median_imputed_plot %>% filter(scenario=="F80")) + 
+  geom_line(aes(x=Date,y=change_scalar_to_baseline),linewidth=1) + 
+  ylab("Proportional change relative to No X2 alternative")+
+  theme_bw() + 
+  theme(axis.title.x=element_blank(),axis.text.x = element_text(angle = 45,hjust=1)) +
+  labs(color="Alternative")+
+  facet_grid(IBMR~region, scales = "free")+
+  ggtitle("Fall X2 action at 80 km Alternative")
+
+tiff(filename=file.path("Output","Figure_relative_F80.tiff"), width = 9, height = 12, units = "in", res = 300, compression = "lzw")
+plot_F80_relative
+dev.off()  # Close the graphics device
+
+plot_S74_relative<-ggplot(data=zoop_model_data_median_imputed_plot %>% filter(scenario=="S74")) + 
+  geom_line(aes(x=Date,y=change_scalar_to_baseline),linewidth=1) + 
+  ylab("Proportional change relative to No X2 alternative")+
+  theme_bw() + 
+  theme(axis.title.x=element_blank(),axis.text.x = element_text(angle = 45,hjust=1)) +
+  labs(color="Alternative")+
+  facet_grid(IBMR~region, scales = "free")+
+  ggtitle("Summer X2 action at 74 km Alternative")
+
+tiff(filename=file.path("Output","Figure_relative_S74.tiff"), width = 9, height = 12, units = "in", res = 300, compression = "lzw")
+plot_S74_relative
+dev.off()  # Close the graphics device
+
+
+plot_S74F80_relative<-ggplot(data=zoop_model_data_median_imputed_plot %>% filter(scenario=="S74F80")) + 
+  geom_line(aes(x=Date,y=change_scalar_to_baseline),linewidth=1) + 
+  ylab("Proportional change relative to No X2 alternative")+
+  theme_bw() + 
+  theme(axis.title.x=element_blank(),axis.text.x = element_text(angle = 45,hjust=1)) +
+  labs(color="Alternative")+
+  facet_grid(IBMR~region, scales = "free")+
+  ggtitle("Summer-fall X2 Combined Alternative")
+
+tiff(filename=file.path("Output","Figure_relative_S74F80.tiff"), width = 9, height = 12, units = "in", res = 300, compression = "lzw")
+plot_S74F80_relative
+dev.off()  # Close the graphics device

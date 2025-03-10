@@ -54,17 +54,17 @@ x2_data_reformat <- x2_data_expanded %>%
 
 #####
 # Load Montezuma slough salinity data from CalSim
-MTZ_data <- AltF80_data %>% select(Date,MTZ_EC_current) %>% mutate(Scenario="AltF80") %>%
-  bind_rows((AltF74_data %>% select(Date,MTZ_EC_current) %>% mutate(Scenario="AltF74"))) %>%
-  bind_rows((AltS74_data %>% select(Date,MTZ_EC_current) %>% mutate(Scenario="AltS74"))) %>%
-  bind_rows((AltS74F80_data %>% select(Date,MTZ_EC_current) %>% mutate(Scenario="AltS74F80"))) %>%
-  bind_rows((AltNoX2_data %>% select(Date,MTZ_EC_current) %>% mutate(Scenario="AltNoX2"))) %>%
+BD_data <- AltF80_data %>% select(Date,BD_EC_current) %>% mutate(Scenario="AltF80") %>%
+  bind_rows((AltF74_data %>% select(Date,BD_EC_current) %>% mutate(Scenario="AltF74"))) %>%
+  bind_rows((AltS74_data %>% select(Date,BD_EC_current) %>% mutate(Scenario="AltS74"))) %>%
+  bind_rows((AltS74F80_data %>% select(Date,BD_EC_current) %>% mutate(Scenario="AltS74F80"))) %>%
+  bind_rows((AltNoX2_data %>% select(Date,BD_EC_current) %>% mutate(Scenario="AltNoX2"))) %>%
   # Convert data to salinity units per discretewq package (https://github.com/InteragencyEcologicalProgram/discretewq)
-  mutate(MTZ_salinity=wql::ec2pss(.data$MTZ_EC_current / 1000, t = 25))
+  mutate(BD_salinity=wql::ec2pss(.data$BD_EC_current / 1000, t = 25))
 
 # Create data for Suisun Marsh
-SM_data <- MTZ_data %>% mutate(year=year(Date),month=month(Date),region="Suisun Marsh") %>% rename(scenario=Scenario) %>%
-  select(month,region,year,scenario,MTZ_salinity) %>% spread(scenario,MTZ_salinity)
+SM_data <- BD_data %>% mutate(year=year(Date),month=month(Date),region="Suisun Marsh") %>% rename(scenario=Scenario) %>%
+  select(month,region,year,scenario,BD_salinity) %>% spread(scenario,BD_salinity)
 #####
 
 # Remove original Suisun Marsh salinity from X2-salinity model
