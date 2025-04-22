@@ -5,9 +5,9 @@ library(cowplot)
 library(ggpubr)
 rm(list=ls())
 
-setwd("C:/Users/bmahardja/Documents/GitHub/DeltaSmelt_SummerFallX2_VOI/Consequence_Table")
+setwd("C:/Users/bmahardja/OneDrive - DOI/Documents/GitHub/DeltaSmelt_SummerFallX2_VOI/Consequence_Table")
 
-cons_table <- read.csv(file.path("Data","ConsequenceTable_2024-09-25.csv"))
+cons_table <- read.csv(file.path("Data","ConsequenceTable_2025-04-22.csv"))
 
 
 # Standardize score based on local scale
